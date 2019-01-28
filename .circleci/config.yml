@@ -1,0 +1,29 @@
+version: 2
+
+jobs:
+  build:
+    docker:
+      - image: rust:1.32.0-stretch
+
+    environment:
+      RUST_BACKTRACE: 1
+
+    steps:
+      - checkout
+      - run:
+          name: check formatting
+          command: |
+            rustup component add rustfmt
+            cargo fmt -- --check
+      - run:
+          name: linting
+          command: |
+            rustup component add clippy
+            cargo clippy -- --deny clippy::all
+      - run:
+          name: tests
+          command: |
+            cargo test
+      - run:
+          name: build
+          command: cargo build
