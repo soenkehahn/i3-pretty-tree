@@ -10,8 +10,16 @@ fn main() -> Result<(), Box<Error>> {
 
 fn format_node(node: &Node) -> String {
     let name = node.name.clone().unwrap_or_else(|| "<None>".to_string());
-    match node.nodetype {
-        NodeType::Workspace => format!("WORKSPACE: {}", name),
+    match node {
+        Node {
+            nodetype: NodeType::Workspace,
+            ..
+        } => format!("WORKSPACE: {}", name),
+        Node {
+            name: None,
+            nodetype: NodeType::Con,
+            ..
+        } => format!("CONTAINER: {:?}", node.layout),
         _ => name,
     }
 }
@@ -57,5 +65,13 @@ mod format_node {
         node.name = Some(format!("foo"));
         node.nodetype = NodeType::Workspace;
         assert_eq!(format_node(&node), "WORKSPACE: foo")
+    }
+
+    #[test]
+    fn shows_layout_for_unnamed_containers() {
+        let mut node = node();
+        node.nodetype = NodeType::Con;
+        node.layout = NodeLayout::SplitH;
+        assert_eq!(format_node(&node), "CONTAINER: SplitH")
     }
 }
