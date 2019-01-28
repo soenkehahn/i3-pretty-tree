@@ -16,6 +16,10 @@ fn format_node(node: &Node) -> String {
             ..
         } => format!("WORKSPACE: {}", name),
         Node {
+            nodetype: NodeType::Output,
+            ..
+        } => format!("OUTPUT: {}", name),
+        Node {
             name: None,
             nodetype: NodeType::Con,
             ..
@@ -65,6 +69,14 @@ mod format_node {
         node.name = Some(format!("foo"));
         node.nodetype = NodeType::Workspace;
         assert_eq!(format_node(&node), "WORKSPACE: foo")
+    }
+
+    #[test]
+    fn marks_outputs_as_such() {
+        let mut node = node();
+        node.name = Some(format!("foo"));
+        node.nodetype = NodeType::Output;
+        assert_eq!(format_node(&node), "OUTPUT: foo")
     }
 
     #[test]
