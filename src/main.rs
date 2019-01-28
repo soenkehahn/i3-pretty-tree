@@ -12,13 +12,17 @@ fn format_node(node: &Node) -> String {
     let name = node.name.clone().unwrap_or_else(|| "<None>".to_string());
     match node {
         Node {
-            nodetype: NodeType::Workspace,
+            nodetype: NodeType::Root,
             ..
-        } => format!("WORKSPACE: {}", name),
+        } => "ROOT".to_string(),
         Node {
             nodetype: NodeType::Output,
             ..
         } => format!("OUTPUT: {}", name),
+        Node {
+            nodetype: NodeType::Workspace,
+            ..
+        } => format!("WORKSPACE: {}", name),
         Node {
             name: None,
             nodetype: NodeType::Con,
@@ -77,6 +81,14 @@ mod format_node {
         node.name = Some(format!("foo"));
         node.nodetype = NodeType::Output;
         assert_eq!(format_node(&node), "OUTPUT: foo")
+    }
+
+    #[test]
+    fn marks_root_as_such() {
+        let mut node = node();
+        node.name = Some(format!("root"));
+        node.nodetype = NodeType::Root;
+        assert_eq!(format_node(&node), "ROOT")
     }
 
     #[test]
