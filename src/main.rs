@@ -8,8 +8,24 @@ fn main() -> R<()> {
     let mut connection = I3Connection::connect()?;
     let root = connection.get_tree()?;
     let workspace = find_active_workspace(&connection.get_workspaces()?, &root)?;
-    print!("{}", workspace.custom_pretty(format_node));
+    print!("{}", tree_to_dot(workspace, format_node));
     Ok(())
+}
+
+fn tree_to_dot(root: &Node, node_to_label: fn(node: &Node) -> String) -> String {
+    let mut lines = vec!["digraph g {".to_string()];
+    for current in root.iter() {
+        lines.push(format!(
+            "n{} [ label = \"{}\" ];",
+            current.id,
+            node_to_label(current)
+        ));
+        for child in current.nodes.iter() {
+            lines.push(format!("n{} -> n{:?};", current.id, child.id));
+        }
+    }
+    lines.push("}".to_string());
+    format!("{}\n", lines.join("\n"))
 }
 
 fn format_node(node: &Node) -> String {
@@ -53,7 +69,7 @@ fn find_active_workspace<'a>(workspaces: &Workspaces, root: &'a Node) -> R<&'a N
 }
 
 #[cfg(test)]
-mod format_node {
+mod test {
     use super::*;
     use i3ipc::reply::{NodeBorder, NodeLayout};
 
@@ -76,6 +92,66 @@ mod format_node {
             window: None,
             urgent: false,
             focused: false,
+        }
+    }
+
+    mod tree_to_dot {
+        use super::*;
+
+        #[test]
+        fn translates_trees_with_one_element() {
+            let mut root = node();
+            root.name = Some("root".to_string());
+            let dot = tree_to_dot(&root, |node| {
+                format!("label: {}", node.name.clone().unwrap())
+            });
+            assert_eq!(dot, "digraph g {\nn1 [ label = \"label: root\" ];\n}\n");
+        }
+
+        fn tree() -> Node {
+            let mut grandchild = node();
+            grandchild.id = 3;
+            grandchild.name = Some("grandchild".to_string());
+            let mut child = node();
+            child.id = 2;
+            child.name = Some("child".to_string());
+            child.nodes = vec![grandchild];
+            let mut root = node();
+            root.id = 1;
+            root.name = Some("root".to_string());
+            root.nodes = vec![child];
+            root
+        }
+
+        #[test]
+        fn translates_child_nodes() {
+            let root = tree();
+            let dot = tree_to_dot(&root, |node| {
+                format!("label: {}", node.name.clone().unwrap())
+            });
+            assert!(
+                dot.lines()
+                    .any(|line| line == "n2 [ label = \"label: child\" ];"),
+                dot
+            );
+        }
+
+        #[test]
+        fn translates_edges() {
+            let root = tree();
+            let dot = tree_to_dot(&root, |node| {
+                format!("label: {}", node.name.clone().unwrap())
+            });
+            assert!(dot.lines().any(|line| line == "n1 -> n2;"), dot);
+        }
+
+        #[test]
+        fn translates_nested_edges() {
+            let root = tree();
+            let dot = tree_to_dot(&root, |node| {
+                format!("label: {}", node.name.clone().unwrap())
+            });
+            assert!(dot.lines().any(|line| line == "n2 -> n3;"), dot);
         }
     }
 
