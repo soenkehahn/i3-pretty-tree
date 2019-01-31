@@ -5,4 +5,4 @@ authors = ["Sönke Hahn <soenkehahn@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-i3ipc = { git = "https://github.com/soenkehahn/i3ipc-rs", rev = "4e289e4" }
+i3ipc = { git = "https://github.com/soenkehahn/i3ipc-rs", rev = "80da62d" }
