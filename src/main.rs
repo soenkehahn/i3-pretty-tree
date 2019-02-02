@@ -1,6 +1,7 @@
 use i3ipc::reply::{Node, NodeType, Workspaces};
 use i3ipc::I3Connection;
 use std::error::Error;
+use unicode_segmentation::UnicodeSegmentation;
 
 type R<A> = Result<A, Box<Error>>;
 
@@ -8,8 +9,27 @@ fn main() -> R<()> {
     let mut connection = I3Connection::connect()?;
     let root = connection.get_tree()?;
     let workspace = find_active_workspace(&connection.get_workspaces()?, &root)?;
-    print!("{}", tree_to_dot(workspace, format_node));
+    print!(
+        "{}",
+        tree_to_dot(workspace, |node| limit_text_size(18, format_node(node)))
+    );
     Ok(())
+}
+
+fn find_active_workspace<'a>(workspaces: &Workspaces, root: &'a Node) -> R<&'a Node> {
+    let active_workspace = workspaces
+        .workspaces
+        .iter()
+        .find(|workspace| workspace.focused)
+        .ok_or("no focused workspace found")?;
+    let active_workspace_node = root
+        .iter()
+        .find(|node| match node.nodetype {
+            NodeType::Workspace { num } => num == active_workspace.num,
+            _ => false,
+        })
+        .ok_or_else(|| format!("workspace with num {} not found", active_workspace.num))?;
+    Ok(active_workspace_node)
 }
 
 fn tree_to_dot(root: &Node, node_to_label: fn(node: &Node) -> String) -> String {
@@ -52,20 +72,22 @@ fn format_node(node: &Node) -> String {
     }
 }
 
-fn find_active_workspace<'a>(workspaces: &Workspaces, root: &'a Node) -> R<&'a Node> {
-    let active_workspace = workspaces
-        .workspaces
-        .iter()
-        .find(|workspace| workspace.focused)
-        .ok_or("no focused workspace found")?;
-    let active_workspace_node = root
-        .iter()
-        .find(|node| match node.nodetype {
-            NodeType::Workspace { num } => num == active_workspace.num,
-            _ => false,
-        })
-        .ok_or_else(|| format!("workspace with num {} not found", active_workspace.num))?;
-    Ok(active_workspace_node)
+fn limit_text_size(limit: usize, text: String) -> String {
+    let text = text.graphemes(true).collect::<Vec<&str>>();
+    if limit <= 3 {
+        text[..limit].join("")
+    } else if text.len() <= limit {
+        text.join("")
+    } else {
+        let snippet_length: f32 = (limit - 3) as f32 / 2.0;
+        let prefix_end = snippet_length.ceil() as usize;
+        let suffix_start = text.len() - snippet_length as usize;
+        format!(
+            "{}...{}",
+            text[..prefix_end].join(""),
+            text[suffix_start..].join("")
+        )
+    }
 }
 
 #[cfg(test)]
@@ -92,6 +114,53 @@ mod test {
             window: None,
             urgent: false,
             focused: false,
+        }
+    }
+
+    mod find_active_workspace {
+        use super::*;
+        use i3ipc::reply::Workspace;
+
+        fn workspace() -> Workspace {
+            Workspace {
+                num: 1,
+                name: "workspace name".to_string(),
+                visible: true,
+                focused: false,
+                urgent: false,
+                rect: (0, 0, 10, 10),
+                output: "some output".to_string(),
+            }
+        }
+
+        #[test]
+        fn returns_the_active_workspace() {
+            let workspaces = {
+                let mut active: Workspace = workspace();
+                active.num = 1;
+                active.name = "active workspace".to_string();
+                active.focused = true;
+                let mut inactive: Workspace = workspace();
+                inactive.num = 2;
+                inactive.name = "inactive workspace".to_string();
+                Workspaces {
+                    workspaces: vec![active, inactive],
+                }
+            };
+            let root = {
+                let mut active: Node = node();
+                active.nodetype = NodeType::Workspace { num: 1 };
+                active.name = Some("active workspace".to_string());
+                let mut inactive: Node = node();
+                inactive.nodetype = NodeType::Workspace { num: 2 };
+                inactive.name = Some("inactive workspace".to_string());
+                let mut root: Node = node();
+                root.nodes = vec![active, inactive];
+                root.nodetype = NodeType::Root;
+                root
+            };
+            let active_workspace: &Node = find_active_workspace(&workspaces, &root).unwrap();
+            assert_eq!(active_workspace.name, Some("active workspace".to_string()));
         }
     }
 
@@ -198,50 +267,41 @@ mod test {
         }
     }
 
-    mod find_active_workspace {
+    mod limit_text_size {
         use super::*;
-        use i3ipc::reply::Workspace;
 
-        fn workspace() -> Workspace {
-            Workspace {
-                num: 1,
-                name: "workspace name".to_string(),
-                visible: true,
-                focused: false,
-                urgent: false,
-                rect: (0, 0, 10, 10),
-                output: "some output".to_string(),
-            }
+        #[test]
+        fn limits_the_size_to_the_given_length() {
+            assert_eq!(limit_text_size(5, "123456".to_string()).len(), 5);
         }
 
         #[test]
-        fn returns_the_active_workspace() {
-            let workspaces = {
-                let mut active: Workspace = workspace();
-                active.num = 1;
-                active.name = "active workspace".to_string();
-                active.focused = true;
-                let mut inactive: Workspace = workspace();
-                inactive.num = 2;
-                inactive.name = "inactive workspace".to_string();
-                Workspaces {
-                    workspaces: vec![active, inactive],
-                }
-            };
-            let root = {
-                let mut active: Node = node();
-                active.nodetype = NodeType::Workspace { num: 1 };
-                active.name = Some("active workspace".to_string());
-                let mut inactive: Node = node();
-                inactive.nodetype = NodeType::Workspace { num: 2 };
-                inactive.name = Some("inactive workspace".to_string());
-                let mut root: Node = node();
-                root.nodes = vec![active, inactive];
-                root.nodetype = NodeType::Root;
-                root
-            };
-            let active_workspace: &Node = find_active_workspace(&workspaces, &root).unwrap();
-            assert_eq!(active_workspace.name, Some("active workspace".to_string()));
+        fn inserts_dots_in_the_middle() {
+            assert_eq!(limit_text_size(7, "1234567890".to_string()), "12...90");
+        }
+
+        #[test]
+        fn works_for_even_limits() {
+            assert_eq!(limit_text_size(8, "1234567890".to_string()), "123...90");
+        }
+
+        #[test]
+        fn does_not_modify_short_enough_strings() {
+            assert_eq!(limit_text_size(8, "12345678".to_string()), "12345678");
+            assert_eq!(limit_text_size(8, "1234567".to_string()), "1234567");
+        }
+
+        #[test]
+        fn when_limit_too_small_returns_prefix() {
+            assert_eq!(limit_text_size(4, "12345678".to_string()), "1...");
+            assert_eq!(limit_text_size(3, "12345678".to_string()), "123");
+            assert_eq!(limit_text_size(2, "12345678".to_string()), "12");
+        }
+
+        #[test]
+        fn handles_unicode_characters_gracefully() {
+            let unicode_string = "—3456";
+            limit_text_size(5, unicode_string.to_string());
         }
     }
 }

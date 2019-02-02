@@ -6,3 +6,4 @@ edition = "2018"
 
 [dependencies]
 i3ipc = { git = "https://github.com/soenkehahn/i3ipc-rs", rev = "75ccae0" }
+unicode-segmentation = "*"
