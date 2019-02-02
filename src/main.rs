@@ -48,8 +48,18 @@ fn tree_to_dot(root: &Node, node_to_label: fn(node: &Node) -> String) -> String 
     format!("{}\n", lines.join("\n"))
 }
 
+fn escape_special_chars(text: String) -> String {
+    text.chars()
+        .map(|char| match char {
+            '\"' => r#"\""#.to_string(),
+            _ => char.to_string(),
+        })
+        .collect::<Vec<String>>()
+        .join("")
+}
+
 fn format_node(node: &Node) -> String {
-    let name = node.name.clone().unwrap_or_else(|| "<None>".to_string());
+    let name = escape_special_chars(node.name.clone().unwrap_or_else(|| "<None>".to_string()));
     match node {
         Node {
             nodetype: NodeType::Root,
@@ -264,6 +274,13 @@ mod test {
             node.nodetype = NodeType::Con;
             node.layout = NodeLayout::SplitH;
             assert_eq!(format_node(&node), "CONTAINER: SplitH")
+        }
+
+        #[test]
+        fn escapes_quotes() {
+            let mut node = node();
+            node.name = Some(format!("\"foo\""));
+            assert_eq!(format_node(&node), r#"\"foo\""#)
         }
     }
 
