@@ -22,4 +22,4 @@ n94027044558032 [ label = "Mozilla Firefox" ];
 
 Rendered:
 
-![dot graph](https://raw.githubusercontent.com/soenkehahn/i3-pretty-tree/sh/add-readme/example.png)
+![dot graph](example.png)
