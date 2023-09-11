@@ -18,7 +18,7 @@ fn main() -> R<()> {
     Ok(())
 }
 
-fn find_active_workspace<'a>(workspaces: Vec<Workspace>, root: &'a Node) -> R<&'a Node> {
+fn find_active_workspace(workspaces: Vec<Workspace>, root: &Node) -> R<&Node> {
     let active_workspace = workspaces
         .iter()
         .find(|workspace| workspace.focused)
