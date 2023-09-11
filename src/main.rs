@@ -3,7 +3,7 @@ use i3ipc::I3Connection;
 use std::error::Error;
 use unicode_segmentation::UnicodeSegmentation;
 
-type R<A> = Result<A, Box<Error>>;
+type R<A> = Result<A, Box<dyn Error>>;
 
 fn main() -> R<()> {
     let mut connection = I3Connection::connect()?;
@@ -211,6 +211,7 @@ mod test {
             assert!(
                 dot.lines()
                     .any(|line| line == "n2 [ label = \"label: child\" ];"),
+                "{:?}",
                 dot
             );
         }
@@ -221,7 +222,7 @@ mod test {
             let dot = tree_to_dot(&root, |node| {
                 format!("label: {}", node.name.clone().unwrap())
             });
-            assert!(dot.lines().any(|line| line == "n1 -> n2;"), dot);
+            assert!(dot.lines().any(|line| line == "n1 -> n2;"), "{:?}", dot);
         }
 
         #[test]
@@ -230,7 +231,7 @@ mod test {
             let dot = tree_to_dot(&root, |node| {
                 format!("label: {}", node.name.clone().unwrap())
             });
-            assert!(dot.lines().any(|line| line == "n2 -> n3;"), dot);
+            assert!(dot.lines().any(|line| line == "n2 -> n3;"), "{:?}", dot);
         }
     }
 
