@@ -1,14 +1,16 @@
-use i3ipc::reply::{Node, NodeType, Workspaces};
-use i3ipc::I3Connection;
 use std::error::Error;
+use swayipc::Connection;
+use swayipc::Node;
+use swayipc::NodeType;
+use swayipc::Workspace;
 use unicode_segmentation::UnicodeSegmentation;
 
 type R<A> = Result<A, Box<dyn Error>>;
 
 fn main() -> R<()> {
-    let mut connection = I3Connection::connect()?;
+    let mut connection = Connection::new()?;
     let root = connection.get_tree()?;
-    let workspace = find_active_workspace(&connection.get_workspaces()?, &root)?;
+    let workspace = find_active_workspace(connection.get_workspaces()?, &root)?;
     print!(
         "{}",
         tree_to_dot(workspace, |node| limit_text_size(18, format_node(node)))
@@ -16,19 +18,14 @@ fn main() -> R<()> {
     Ok(())
 }
 
-fn find_active_workspace<'a>(workspaces: &Workspaces, root: &'a Node) -> R<&'a Node> {
+fn find_active_workspace(workspaces: Vec<Workspace>, root: &Node) -> R<&Node> {
     let active_workspace = workspaces
-        .workspaces
         .iter()
         .find(|workspace| workspace.focused)
         .ok_or("no focused workspace found")?;
     let active_workspace_node = root
-        .iter()
-        .find(|node| match node.nodetype {
-            NodeType::Workspace { num } => num == active_workspace.num,
-            _ => false,
-        })
-        .ok_or_else(|| format!("workspace with num {} not found", active_workspace.num))?;
+        .find_as_ref(|node| node.node_type == NodeType::Workspace && node.id == active_workspace.id)
+        .ok_or_else(|| format!("workspace with id {} not found", active_workspace.id))?;
     Ok(active_workspace_node)
 }
 
@@ -62,20 +59,20 @@ fn format_node(node: &Node) -> String {
     let name = escape_special_chars(node.name.clone().unwrap_or_else(|| "<None>".to_string()));
     match node {
         Node {
-            nodetype: NodeType::Root,
+            node_type: NodeType::Root,
             ..
         } => "ROOT".to_string(),
         Node {
-            nodetype: NodeType::Output,
+            node_type: NodeType::Output,
             ..
         } => format!("OUTPUT: {}", name),
         Node {
-            nodetype: NodeType::Workspace { .. },
+            node_type: NodeType::Workspace { .. },
             ..
         } => format!("WORKSPACE: {}", name),
         Node {
             name: None,
-            nodetype: NodeType::Con,
+            node_type: NodeType::Con,
             ..
         } => format!("CONTAINER: {:?}", node.layout),
         _ => name,
@@ -102,44 +99,75 @@ fn limit_text_size(limit: usize, text: String) -> String {
 
 #[cfg(test)]
 mod test {
+    use swayipc::NodeBorder;
+    use swayipc::NodeLayout;
+    use swayipc::NodeType;
+    use swayipc::Rect;
+
     use super::*;
-    use i3ipc::reply::{NodeBorder, NodeLayout};
+
+    fn rect() -> Rect {
+        Rect {
+            x: 0,
+            y: 0,
+            width: 10,
+            height: 10,
+        }
+    }
 
     fn node() -> Node {
         Node {
-            focus: vec![],
-            nodes: vec![],
-            floating_nodes: vec![],
             id: 1,
             name: None,
-            nodetype: NodeType::Con,
+            node_type: NodeType::Con,
             border: NodeBorder::Normal,
-            current_border_width: 4,
-            layout: NodeLayout::SplitH,
+            current_border_width: 0,
+            layout: NodeLayout::Tabbed,
             percent: None,
-            rect: (0, 0, 100, 100),
-            window_rect: (0, 0, 0, 0),
-            deco_rect: (0, 0, 0, 0),
-            geometry: (0, 0, 0, 0),
-            window: None,
+            rect: rect(),
+            window_rect: rect(),
+            deco_rect: rect(),
+            geometry: rect(),
             urgent: false,
             focused: false,
+            focus: Vec::new(),
+            nodes: Vec::new(),
+            floating_nodes: Vec::new(),
+            sticky: false,
+            representation: None,
+            fullscreen_mode: None,
+            app_id: None,
+            pid: None,
+            window: None,
+            num: None,
+            window_properties: None,
+            marks: Vec::new(),
+            inhibit_idle: None,
+            idle_inhibitors: None,
+            shell: None,
+            visible: None,
+            output: None,
         }
     }
 
     mod find_active_workspace {
         use super::*;
-        use i3ipc::reply::Workspace;
+        use swayipc::NodeType;
 
         fn workspace() -> Workspace {
             Workspace {
+                id: 42,
                 num: 1,
                 name: "workspace name".to_string(),
+                layout: "tabbed".to_string(),
                 visible: true,
                 focused: false,
                 urgent: false,
-                rect: (0, 0, 10, 10),
-                output: "some output".to_string(),
+                representation: None,
+                orientation: "uh".to_string(),
+                rect: rect(),
+                output: "output".to_string(),
+                focus: Vec::new(),
             }
         }
 
@@ -147,29 +175,29 @@ mod test {
         fn returns_the_active_workspace() {
             let workspaces = {
                 let mut active: Workspace = workspace();
-                active.num = 1;
+                active.id = 1;
                 active.name = "active workspace".to_string();
                 active.focused = true;
                 let mut inactive: Workspace = workspace();
-                inactive.num = 2;
+                inactive.id = 2;
                 inactive.name = "inactive workspace".to_string();
-                Workspaces {
-                    workspaces: vec![active, inactive],
-                }
+                vec![active, inactive]
             };
             let root = {
                 let mut active: Node = node();
-                active.nodetype = NodeType::Workspace { num: 1 };
+                active.node_type = NodeType::Workspace;
+                active.id = 1;
                 active.name = Some("active workspace".to_string());
                 let mut inactive: Node = node();
-                inactive.nodetype = NodeType::Workspace { num: 2 };
+                inactive.node_type = NodeType::Workspace;
+                inactive.id = 2;
                 inactive.name = Some("inactive workspace".to_string());
                 let mut root: Node = node();
                 root.nodes = vec![active, inactive];
-                root.nodetype = NodeType::Root;
+                root.node_type = NodeType::Root;
                 root
             };
-            let active_workspace: &Node = find_active_workspace(&workspaces, &root).unwrap();
+            let active_workspace: &Node = find_active_workspace(workspaces, &root).unwrap();
             assert_eq!(active_workspace.name, Some("active workspace".to_string()));
         }
     }
@@ -249,7 +277,7 @@ mod test {
         fn marks_workspaces_as_such() {
             let mut node = node();
             node.name = Some(format!("foo"));
-            node.nodetype = NodeType::Workspace { num: 0 };
+            node.node_type = NodeType::Workspace;
             assert_eq!(format_node(&node), "WORKSPACE: foo")
         }
 
@@ -257,7 +285,7 @@ mod test {
         fn marks_outputs_as_such() {
             let mut node = node();
             node.name = Some(format!("foo"));
-            node.nodetype = NodeType::Output;
+            node.node_type = NodeType::Output;
             assert_eq!(format_node(&node), "OUTPUT: foo")
         }
 
@@ -265,14 +293,14 @@ mod test {
         fn marks_root_as_such() {
             let mut node = node();
             node.name = Some(format!("root"));
-            node.nodetype = NodeType::Root;
+            node.node_type = NodeType::Root;
             assert_eq!(format_node(&node), "ROOT")
         }
 
         #[test]
         fn shows_layout_for_unnamed_containers() {
             let mut node = node();
-            node.nodetype = NodeType::Con;
+            node.node_type = NodeType::Con;
             node.layout = NodeLayout::SplitH;
             assert_eq!(format_node(&node), "CONTAINER: SplitH")
         }

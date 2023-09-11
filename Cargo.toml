@@ -5,5 +5,5 @@ authors = ["Sönke Hahn <soenkehahn@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-i3ipc = { git = "https://github.com/soenkehahn/i3ipc-rs", rev = "75ccae0" }
+swayipc = { git = "https://github.com/soenkehahn/swayipc-rs", rev = "8b3ffc6" }
 unicode-segmentation = "*"

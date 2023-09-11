@@ -14,7 +14,7 @@
             cargoLock = {
               lockFile = "${src}/Cargo.lock";
               outputHashes = {
-                "i3ipc-0.9.0" = "sha256-bL9EnM+LmR1GK1aWRaTAECiYg2+CzdqH7+QzZGX303E=";
+                "swayipc-3.0.1" = "sha256-/ktPyC2OSPSR8iplpeIHKfwdrmaWH11c6VoZkm3uQzY=";
               };
             };
           };
